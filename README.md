@@ -15,8 +15,12 @@
 
 ```powershell
 $Env:VAULT_PATH="env_var"; .\target\debug\obsidian-rust-cli.exe new Hello
+.\target\debug\obsidian-rust-cli.exe --vault "vault" append -n "note" Hello
 ```
 
 ### TODOs
 
-Licence?
+Licence
+Scripts
+Makefile
+Signal processing

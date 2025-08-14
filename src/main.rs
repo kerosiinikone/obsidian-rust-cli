@@ -3,8 +3,8 @@ use chrono::prelude::*;
 use clap::{Parser, Subcommand};
 use std::{
     env,
-    fs::File,
-    io::{Read, Write},
+    fs::{self, File},
+    io::{self, Read, Write},
     path::PathBuf,
 };
 
@@ -31,7 +31,6 @@ struct Template {
 
 impl Template {
     fn parse_string(&mut self) -> Result<()> {
-        // Assume that the path to template is valid
         let mut file = File::open(self.path.as_path())?;
         file.read_to_string(&mut self.template)?;
         Ok(())
@@ -44,6 +43,14 @@ struct Config {
     vault: PathBuf,
     /// Templating for new idea notes
     template: Template,
+}
+
+impl Config {
+    fn is_valid_vault(&mut self) -> bool {
+        let mut paths = fs::read_dir(&self.vault.as_path()).unwrap();
+        self.vault.is_dir() // Might be redundant
+            && paths.any(|path_result| path_result.unwrap().file_name() == ".obsidian")
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -62,23 +69,26 @@ enum Command {
     },
 
     /// Append to an existing note. If not exists, exec "new"
-    Append {},
+    Append {
+        #[arg(short)]
+        note: Option<PathBuf>,
+        idea: Option<String>,
+    },
 
-    /// Open the daily(?) note
+    /// Open the daily(?) note -> could also be just "Daily"
     Open {},
 
     /// Pretty print a note
     Show {},
 }
+
 // Print statistics of the vault
 // Status {},
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Parse config
     let mut cfg = Config::default();
-    // Order: flags, env, cfg file, traversion?
     cfg.vault = if let Some(vault) = args.vault {
         vault
     } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
@@ -88,12 +98,10 @@ fn main() -> anyhow::Result<()> {
         env::current_dir()?
     };
 
-    // Validate the vault location (TODO: has to have .obsidian also)
-    if !cfg.vault.is_dir() {
+    if !cfg.is_valid_vault() {
         return Err(anyhow::Error::msg("Invalid vault"));
     }
 
-    // Template parsing, etc...
     cfg.template.path = if let Some(templ) = args.template {
         templ
     } else {
@@ -106,17 +114,10 @@ fn main() -> anyhow::Result<()> {
     if !cfg.template.path.is_file() {
         return Err(anyhow::Error::msg("Invalid templ path"));
     }
-
     cfg.template.parse_string()?;
-
-    // eprintln!("Template: {:?}", cfg.template.template);
 
     match args.command {
         Command::New { idea } => {
-            // eprintln!("Idea: {idea}");
-            // eprintln!("Vault: {:?}", cfg.vault);
-
-            // Create a new .md file (with a template, if exists -> parsed earlier)
             let mut note_path: PathBuf = cfg.vault.clone();
 
             let local: DateTime<Local> = Local::now();
@@ -127,16 +128,35 @@ fn main() -> anyhow::Result<()> {
 
             let mut new_note_templ = cfg.template.template.clone();
 
-            // Refactor into a more elegant function ("format", etc)
+            // TODO: Refactor into a more elegant function ("format", etc) and
+            // check for a list of "?var" for different templating details
             new_note_templ = new_note_templ.replace("?time", &formatted);
 
             if let Some(idea) = idea {
                 // Generate path
                 new_note_templ = new_note_templ.replace("?body", &idea);
                 handle.write_all(new_note_templ.as_bytes())?;
+            } else {
+                // Prompt for the idea -> make better later
+                let mut idea_buffer = String::new();
+                while idea_buffer.trim_ascii().is_empty() {
+                    io::stdin().read_line(&mut idea_buffer)?;
+                    idea_buffer.clear();
+                }
+                eprintln!("{:?}", idea_buffer)
             }
+        }
+        Command::Append { note, idea } => {
+            // Note could be a relative path from validated vault?
+            let note_path: PathBuf = note.expect("Expected a valid note path");
 
-            // Prompt to give the idea?
+            let mut note_file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&note_path.as_path())?;
+
+            note_file.write(b"\n")?;
+            note_file.write_all(&idea.unwrap().as_bytes())?;
         }
         _ => return Ok(()),
     }
