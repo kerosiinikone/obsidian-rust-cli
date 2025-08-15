@@ -20,7 +20,9 @@ $Env:VAULT_PATH="env_var"; .\target\debug\obsidian-rust-cli.exe new Hello
 
 ### TODOs
 
-Licence
-Scripts
-Makefile
-Signal processing
+- **Handle stdout and stderr correctly**
+- Licence
+- Scripts
+- Signal processing
+- Package
+- Fix slashes

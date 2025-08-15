@@ -29,6 +29,8 @@ struct Template {
     template: String,
 }
 
+// Own parser (struct?) to support more intricate
+// templates later?
 impl Template {
     fn parse_string(&mut self) -> Result<()> {
         let mut file = File::open(self.path.as_path())?;
@@ -76,6 +78,10 @@ enum Command {
     },
 
     /// Open the daily(?) note -> could also be just "Daily"
+    ///
+    /// Example: obsidian://open?vault=TestVault&file=Test%20Note.
+    /// Has to also format the date according to Obsidian's "daily".
+    /// Format as default: "2025-08-15"; "YYYY-MM-DD"
     Open {},
 
     /// Pretty print a note
@@ -105,6 +111,7 @@ fn main() -> anyhow::Result<()> {
     cfg.template.path = if let Some(templ) = args.template {
         templ
     } else {
+        // todo!
         let mut curr = env::current_dir()?;
         curr.push("config");
         curr.push("default_template.md");
@@ -147,16 +154,40 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::Append { note, idea } => {
-            // Note could be a relative path from validated vault?
             let note_path: PathBuf = note.expect("Expected a valid note path");
+
+            let mut abs_path = cfg.vault.clone();
+            abs_path.push(&note_path);
+
+            if !abs_path.is_file() {
+                return Err(anyhow::Error::msg("Invalid note path"));
+            }
 
             let mut note_file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(&note_path.as_path())?;
+                .open(&abs_path.as_path())?;
 
             note_file.write(b"\n")?;
             note_file.write_all(&idea.unwrap().as_bytes())?;
+        }
+        Command::Open {} => {
+            let mut note_path: PathBuf = cfg.vault.clone();
+
+            let local: DateTime<Local> = Local::now();
+            let formatted = format!("{}", local.format("%Y-%m-%d"));
+
+            note_path.push(format!("{}.md", formatted));
+
+            fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(note_path.as_path())?;
+
+            let vault_name = cfg.vault.iter().last().unwrap().to_str().unwrap();
+            let obs_link = format!("obsidian://open?vault={}&file={}", vault_name, formatted);
+
+            open::that(obs_link)?
         }
         _ => return Ok(()),
     }
