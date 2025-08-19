@@ -14,8 +14,8 @@
 ### Commands (Windows PS)
 
 ```powershell
-$Env:VAULT_PATH="env_var"; .\target\debug\obsidian-rust-cli.exe new Hello
-.\target\debug\obsidian-rust-cli.exe --vault "vault" append -n "note" Hello
+$Env:VAULT_PATH="path_to_vault"; .\target\debug\obsidian-rust-cli.exe new Hello
+.\target\debug\obsidian-rust-cli.exe --vault "path_to_vault" append -n "note" Hello
 ```
 
 ### TODOs
