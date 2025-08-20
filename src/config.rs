@@ -1,6 +1,5 @@
-use std::{env, fs, path::PathBuf};
-
 use anyhow::Result;
+use std::{env, fs, path::PathBuf};
 
 use crate::template::Template;
 
@@ -45,6 +44,15 @@ impl Config {
         cfg.template.parse_string()?;
 
         Ok(cfg)
+    }
+
+    pub fn get_full_path(&self, note_path: &PathBuf) -> Result<PathBuf> {
+        let mut abs_path = self.vault.clone();
+        abs_path.push(&note_path);
+        if !abs_path.is_file() {
+            return Err(anyhow::Error::msg("Invalid note path"));
+        }
+        Ok(abs_path.to_path_buf())
     }
 
     fn is_valid_vault(&mut self) -> Result<bool> {

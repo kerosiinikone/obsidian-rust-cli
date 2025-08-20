@@ -9,7 +9,11 @@
    - Commands to add / edit config from terminal
    - Give cfg path directly as a **flag**
 2. Commands to create, append, display (_pretty_) and open (_daily_) notes
-   - ...
+   - Define structures for `Notes`, etc
+3. Vault statistics (async)
+4. Visual TUI / visual formatting for notes, prompts
+5. Handle signals and stdout, stderr
+6. Scripts, config
 
 ### Commands (Windows PS)
 
@@ -20,9 +24,7 @@ $Env:VAULT_PATH="path_to_vault"; .\target\debug\obsidian-rust-cli.exe new Hello
 
 ### TODOs
 
-- **Handle stdout and stderr correctly**
 - Licence
-- Scripts
-- Signal processing
+- Verbose
 - Package
 - Fix slashes
