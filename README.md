@@ -1,6 +1,6 @@
-# obsidian-rust-cli
+# obsidian-rust-cli (in prog.)
 
-**Quick capture from terminal**: create a new "idea" note / append to daily notes from a "fleeting thought". Open, create (daily) notes from terminal, pretty printing. **Incorporate this**: "Vault Statistics Dashboard"
+**Quick capture from terminal**: create a new "idea" note / append to daily notes from a "fleeting thought". Open, create (daily) notes from terminal, pretty printing. Incorporate vault statistics.
 
 ### Workflow (for self)
 

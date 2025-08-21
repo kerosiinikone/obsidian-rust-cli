@@ -56,7 +56,7 @@ impl Config {
     }
 
     fn is_valid_vault(&mut self) -> Result<bool> {
-        let mut paths = fs::read_dir(&self.vault.as_path()).unwrap();
+        let mut paths = fs::read_dir(&self.vault.as_path())?;
         Ok(self.vault.is_dir()
             && paths.any(|path_result| path_result.unwrap().file_name() == ".obsidian"))
     }
