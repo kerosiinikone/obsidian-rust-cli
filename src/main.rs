@@ -2,6 +2,7 @@ use anyhow::{Ok, Result};
 use chrono::prelude::*;
 use clap::{Parser, Subcommand};
 use obsidian_rust_cli::{config::Config, template::TemplArgs};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -12,6 +13,9 @@ use std::{
 };
 use tokio::{io::AsyncReadExt, main, task::JoinSet};
 use walkdir::{DirEntry, WalkDir};
+
+static LINKS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[\[.*?\]\]").unwrap());
+static TAGS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"#\w+").unwrap());
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -70,22 +74,31 @@ enum Command {
 type TagMap = HashMap<String, u32>;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct Note {
     word_count: usize,
     link_count: usize,
-    tags: Vec<String>,
+    tags: TagMap,
 }
 
-fn is_hidden(entry: &DirEntry) -> bool {
-    entry
-        .file_name()
-        .to_str()
-        .map(|s| s.starts_with("."))
-        .unwrap_or(false)
+#[derive(Debug, Clone, Default)]
+struct VaultStats {
+    total_word_count: usize,
+    total_link_count: usize,
+    tags: TagMap,
 }
 
-// Make a main struct to hold the exec functions?
+impl VaultStats {
+    fn merge(&mut self, note: Note) {
+        self.total_link_count += note.link_count;
+        self.total_word_count += note.word_count;
+        for (tag, count) in note.tags {
+            *self.tags.entry(tag).or_insert(0) += count;
+        }
+    }
+}
+
+// Make a main struct to hold the exec functions -> core
 #[main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -98,56 +111,55 @@ async fn main() -> anyhow::Result<()> {
         Command::Show { note } => exec_show_note(note, &cfg),
         Command::Stats {} => {
             let mut set: JoinSet<Note> = JoinSet::new();
-            let mut notes: Vec<Note> = Vec::new();
+            let mut stats = VaultStats::default();
 
             for entry in WalkDir::new(cfg.vault.clone())
                 .into_iter()
                 .filter_entry(|e| !is_hidden(e))
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_file() && e.path().extension() == Some(OsStr::new("md")))
             {
-                let path = entry.as_ref().unwrap().path();
+                set.spawn(async move {
+                    let mut contents = String::new();
+                    let mut file = tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .open(entry.path())
+                        .await
+                        .unwrap();
+                    file.read_to_string(&mut contents).await.unwrap();
 
-                if path.is_file() && path.extension() == Some(OsStr::new("md")) {
-                    set.spawn(async move {
-                        let entry = entry.unwrap().clone();
-                        let mut contents = String::new();
+                    let word_count = contents.split_ascii_whitespace().count();
+                    let link_count = LINKS_REGEX.find_iter(&contents).count();
+                    let mut tag_counts: TagMap = TagMap::new();
 
-                        let mut file = tokio::fs::OpenOptions::new()
-                            .read(true)
-                            .open(entry.path())
-                            .await
-                            .unwrap();
-                        file.read_to_string(&mut contents).await.unwrap();
+                    for t in TAGS_REGEX.find_iter(&contents) {
+                        let tag = t.as_str().to_string();
+                        *tag_counts.entry(tag).or_insert(0) += 1;
+                    }
 
-                        let word_count = contents.split_ascii_whitespace().count();
-
-                        let re_links = Regex::new(r"\[\[.*?\]\]").unwrap();
-                        let link_count = re_links.find_iter(&contents).count();
-
-                        // TODO: Tag Map
-                        // let re_tags = Regex::new(r"#\w+").unwrap();
-                        // let tag_count = re_tags.find_iter(&contents).count();
-
-                        Note {
-                            link_count: link_count,
-                            word_count: word_count,
-                            ..Default::default()
-                        }
-                    });
-                }
+                    Note {
+                        link_count: link_count,
+                        word_count: word_count,
+                        tags: tag_counts,
+                    }
+                });
             }
 
             while let Some(res) = set.join_next().await {
-                notes.push(res?);
+                stats.merge(res?);
             }
 
-            println!(
-                "Word count: {:?}",
-                notes
-                    .iter()
-                    .map(|n| n.word_count)
-                    .reduce(|a, b| a + b)
-                    .unwrap()
-            );
+            let mut freq_tags: Vec<(&String, &u32)> = stats.tags.iter().collect();
+            freq_tags.sort_by_key(|t| t.1);
+            freq_tags.reverse();
+
+            println!("Vault Links: {}", stats.total_link_count);
+            println!("Vault Words: {}", stats.total_word_count);
+            println!("Most Frequent Tags:");
+            for t in freq_tags.iter().take(3) {
+                println!("    {}: {}", t.0, t.1);
+            }
+
             return Ok(());
         }
         _ => Err(anyhow::Error::msg("Invalid command")), // Automatically does this -> clap?
@@ -239,4 +251,12 @@ fn exec_show_note(note_path: PathBuf, cfg: &Config) -> Result<()> {
     io::stdout().write_all(&buf)?;
 
     Ok(())
+}
+
+fn is_hidden(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
 }

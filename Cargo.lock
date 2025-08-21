@@ -372,6 +372,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "once_cell",
  "open",
  "regex",
  "tokio",
