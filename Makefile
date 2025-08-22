@@ -1,13 +1,32 @@
-# Make the flags vars here, cleaner
+EXEC 	:= ./target/debug/cli.exe
+CARGO   := cargo
+
+VAULT_PATH 	?= "C:/Users/onnia/Documents/notes/obisidian-notes-main"
+VAULT_FLAG 	?= --vault "$(VAULT_PATH)"
+VAULT_ENV	?= VAULT_PATH=""
+NOTE_PATH 	?= "test_app/test.md"
+BODY      	?= "Test"
+
+.PHONY: all build
+
+all: build
 
 build:
-	cargo b
+	@cargo build
 
-test_add_flag: build
-	./target/debug/cli.exe --vault "C:\Users\onnia\Documents\notes\obisidian-notes-main" new
+.PHONY: new append open show stats
 
-test_add_env: build
-	VAULT_PATH="./" ./target/debug/cli.exe new "Hello" 
+new: build
+	@$(EXEC) $(VAULT_FLAG) new "$(BODY)"
 
-test_append_flag: build
-	./target/debug/cli.exe --vault "C:\Users\onnia\Documents\notes\obisidian-notes-main" append -n "test_app\test.md" "Appended Test"
+append: build
+	@$(EXEC) $(VAULT_FLAG) append -n "$(NOTE_PATH)" "$(BODY)"
+
+open: build
+	@$(EXEC) $(VAULT_FLAG) open
+
+show: build
+	@$(EXEC) $(VAULT_FLAG) show -n "$(NOTE_PATH)"
+
+stats: build
+	@$(EXEC) $(VAULT_FLAG) stats
