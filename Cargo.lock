@@ -213,12 +213,7 @@ dependencies = [
  "chrono",
  "clap",
  "cli_core",
- "once_cell",
- "open",
- "regex",
  "tokio",
- "urlencoding",
- "walkdir",
 ]
 
 [[package]]
@@ -226,6 +221,12 @@ name = "cli_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "once_cell",
+ "open",
+ "regex",
+ "tokio",
+ "urlencoding",
+ "walkdir",
 ]
 
 [[package]]

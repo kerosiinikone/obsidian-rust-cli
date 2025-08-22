@@ -1,24 +1,13 @@
 use anyhow::{Ok, Result};
-use chrono::prelude::*;
+use chrono::Local;
 use clap::{Parser, Subcommand};
-use cli_core::{
-    config::Config,
-    template::TemplArgs,
-    vault::{Note, TagMap, VaultStats},
-};
-use once_cell::sync::Lazy;
-use regex::Regex;
+use cli_core::{config::Config, note::Note, template::TemplArgs, vault::VaultStats};
 use std::{
-    ffi::OsStr,
     fs::{self, File},
     io::{self, Read, Write},
     path::PathBuf,
 };
-use tokio::{io::AsyncReadExt, main, task::JoinSet};
-use walkdir::{DirEntry, WalkDir};
-
-static LINKS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[\[.*?\]\]").unwrap());
-static TAGS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"#\w+").unwrap());
+use tokio::main;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -84,121 +73,75 @@ async fn main() -> anyhow::Result<()> {
         Command::Append { note, idea } => exec_append_note(idea, note, &cfg),
         Command::Open {} => exec_open_daily(&cfg),
         Command::Show { note } => exec_show_note(note, &cfg),
-        Command::Stats {} => {
-            let mut set: JoinSet<Note> = JoinSet::new();
-            let mut stats = VaultStats::default();
-
-            for entry in WalkDir::new(cfg.vault.clone())
-                .into_iter()
-                .filter_entry(|e| !is_hidden(e))
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_file() && e.path().extension() == Some(OsStr::new("md")))
-            {
-                set.spawn(async move {
-                    let mut contents = String::new();
-                    let mut file = tokio::fs::OpenOptions::new()
-                        .read(true)
-                        .open(entry.path())
-                        .await
-                        .unwrap();
-                    file.read_to_string(&mut contents).await.unwrap();
-
-                    let word_count = contents.split_ascii_whitespace().count();
-                    let link_count = LINKS_REGEX.find_iter(&contents).count();
-                    let mut tag_counts: TagMap = TagMap::new();
-
-                    for t in TAGS_REGEX.find_iter(&contents) {
-                        let tag = t.as_str().to_string();
-                        *tag_counts.entry(tag).or_insert(0) += 1;
-                    }
-
-                    Note {
-                        link_count: link_count,
-                        word_count: word_count,
-                        tags: tag_counts,
-                    }
-                });
-            }
-
-            while let Some(res) = set.join_next().await {
-                stats.merge(res?);
-            }
-
-            let mut freq_tags: Vec<(&String, &u32)> = stats.tags.iter().collect();
-            freq_tags.sort_by_key(|t| t.1);
-            freq_tags.reverse();
-
-            println!("Vault Links: {}", stats.total_link_count);
-            println!("Vault Words: {}", stats.total_word_count);
-            println!("Most Frequent Tags:");
-            for t in freq_tags.iter().take(3) {
-                println!("    {}: {}", t.0, t.1);
-            }
-
-            return Ok(());
-        }
+        Command::Stats {} => exec_vault_stats(&cfg).await,
         _ => Err(anyhow::Error::msg("Invalid command")), // Automatically does this -> clap?
     }
+}
+
+async fn exec_vault_stats(cfg: &Config) -> Result<()> {
+    let mut stats = VaultStats::default();
+    stats.walk_vault(cfg).await?;
+
+    println!("Vault Links: {}", stats.total_link_count);
+    println!("Vault Words: {}", stats.total_word_count);
+    println!("Most Frequent Tags:");
+
+    for (tag, count) in stats.frequent_tags(3) {
+        println!("    {}: {}", tag, count);
+    }
+
+    return Ok(());
 }
 
 fn exec_new_note(idea: Option<String>, cfg: &Config) -> Result<()> {
     let mut note_path: PathBuf = cfg.vault.clone();
 
     if let Some(idea) = idea {
-        let local: DateTime<Local> = Local::now();
-        let formatted = format!("{}", local.format("%Y_%m_%d_%H_%M_%S"));
+        let formatted = format!("{}", Local::now().format("%Y_%m_%d_%H_%M_%S"));
+        note_path.push(format!("Note_{}.md", formatted));
 
-        note_path.push(format!("Note_{}.md", &formatted));
-        let mut handle = File::create(note_path.as_path())?;
+        let handle = File::create(note_path.as_path())?;
 
         let body = cfg.template.render(&TemplArgs {
             body: idea,
             date: formatted,
         })?;
 
-        handle.write_all(body.as_bytes())?;
+        let mut note = Note::new(&handle, &note_path, Some(body));
+        note.write_file_handle()?;
+
+        println!("Created note: {}", note);
+        Ok(())
     } else {
         // Prompt for the idea -> make better later
         let mut idea_buffer = String::new();
         while idea_buffer.trim_ascii().is_empty() {
+            idea_buffer.clear();
             println!("Please enter your idea (end with Ctrl-D):");
             io::stdin().read_line(&mut idea_buffer)?;
-            idea_buffer.clear();
         }
         return exec_new_note(Some(idea_buffer), cfg);
     }
-
-    println!("Created note: {}", note_path.display());
-    Ok(())
 }
 
 fn exec_append_note(idea: String, note: PathBuf, cfg: &Config) -> Result<()> {
     let abs_path = cfg.get_full_path(&note)?;
-
-    let mut note_file = fs::OpenOptions::new()
+    let handle = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&abs_path.as_path())?;
 
-    note_file.write(b"\n")?;
-    note_file.write_all(&idea.as_bytes())?;
+    let mut note = Note::new(&handle, &abs_path, None);
+    note.append(&idea)?;
 
-    println!("Appended to note: {}", abs_path.display());
+    println!("Appended to note: {}", note);
     Ok(())
 }
 
 fn exec_open_daily(cfg: &Config) -> Result<()> {
     let mut note_path: PathBuf = cfg.vault.clone();
-
-    let local: DateTime<Local> = Local::now();
-    let formatted = format!("{}", local.format("%Y-%m-%d"));
-
+    let formatted = format!("{}", Local::now().format("%Y-%m-%d"));
     note_path.push(format!("{}.md", formatted));
-
-    fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(note_path.as_path())?;
 
     let vault_name = cfg
         .vault
@@ -206,14 +149,7 @@ fn exec_open_daily(cfg: &Config) -> Result<()> {
         .and_then(|name| name.to_str())
         .unwrap_or("");
 
-    let obs_link = format!(
-        "obsidian://open?vault={}&file={}",
-        urlencoding::encode(vault_name),
-        urlencoding::encode(&formatted)
-    );
-
-    open::that(obs_link)?;
-
+    Note::open(note_path, &vault_name, formatted)?;
     Ok(())
 }
 
@@ -224,14 +160,5 @@ fn exec_show_note(note_path: PathBuf, cfg: &Config) -> Result<()> {
 
     handle.read_to_end(&mut buf)?;
     io::stdout().write_all(&buf)?;
-
     Ok(())
-}
-
-fn is_hidden(entry: &DirEntry) -> bool {
-    entry
-        .file_name()
-        .to_str()
-        .map(|s| s.starts_with("."))
-        .unwrap_or(false)
 }
