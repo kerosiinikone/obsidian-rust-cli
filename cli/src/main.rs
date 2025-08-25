@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use cli_core::{config::Config, note::Note, template::TemplArgs, vault::VaultStats};
 use std::{
     fs::{self, File},
-    io::{self, Read, Write},
+    io::{self, Read},
     path::PathBuf,
 };
 use tokio::main;
@@ -156,9 +156,15 @@ fn exec_open_daily(cfg: &Config) -> Result<()> {
 fn exec_show_note(note_path: PathBuf, cfg: &Config) -> Result<()> {
     let abs_path = cfg.get_full_path(&note_path)?;
     let mut handle = File::open(&abs_path.as_path())?;
-    let mut buf: Vec<u8> = Vec::new();
+    // let mut buf: Vec<u8> = Vec::new();
+    let mut buf = String::new();
 
-    handle.read_to_end(&mut buf)?;
-    io::stdout().write_all(&buf)?;
+    // handle.read_to_end(&mut buf)?;
+    // io::stdout().write_all(&buf)?;
+
+    // TODO: parse highlights trick
+
+    handle.read_to_string(&mut buf)?;
+    termimad::print_text(&buf);
     Ok(())
 }

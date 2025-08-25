@@ -8,7 +8,9 @@ Check out `Makefile`.
 
 ### TODOs
 
+- **TUI**
 - Licence
+- .md (rendering) for CLI
 - Verbose
 - Package
-- Fix slashes
+- Tests and CI
