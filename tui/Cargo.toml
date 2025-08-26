@@ -1,0 +1,11 @@
+[package]
+name = "tui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.99"
+chrono = "0.4.41"
+cli_core = { version = "0.1.0", path = "../core" }
+color-eyre = "0.6.5"
+ratatui = { version = "0.29.0", features = ["all-widgets"] }

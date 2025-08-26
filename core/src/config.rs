@@ -1,5 +1,11 @@
 use anyhow::Result;
-use std::{env, fs, path::PathBuf};
+use std::{
+    env,
+    fs::{self, File},
+    io::Read,
+    path::PathBuf,
+};
+use toml::Table;
 
 use crate::template::Template;
 
@@ -20,8 +26,10 @@ impl Config {
         } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
             PathBuf::from(vault)
         } else {
-            // TODO: Read cfg file / default to a "default_location"
-            env::current_dir()?
+            let mut path = env::current_dir()?;
+            path.push("config");
+            path.push("default.toml");
+            Self::parse_cfg_file(path)?
         };
 
         if !cfg.is_valid_vault()? {
@@ -31,11 +39,10 @@ impl Config {
         cfg.template.path = if let Some(templ) = &template {
             templ.to_path_buf()
         } else {
-            // todo!
-            let mut curr = env::current_dir()?;
-            curr.push("config");
-            curr.push("default_template.md");
-            curr
+            let mut path = env::current_dir()?;
+            path.push("config");
+            path.push("default_template.md");
+            path
         };
 
         if !cfg.template.path.is_file() {
@@ -59,5 +66,16 @@ impl Config {
         let mut paths = fs::read_dir(&self.vault.as_path())?;
         Ok(self.vault.is_dir()
             && paths.any(|path_result| path_result.unwrap().file_name() == ".obsidian"))
+    }
+
+    fn parse_cfg_file(path: PathBuf) -> Result<PathBuf> {
+        let mut file = File::open(path.as_path())?;
+        let mut buf: String = String::new();
+        file.read_to_string(&mut buf)?;
+
+        let vault_path = buf.parse::<Table>()?;
+        let vault_path = vault_path["vault_path"].as_str().unwrap_or("");
+
+        Ok(PathBuf::from(vault_path))
     }
 }
