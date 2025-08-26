@@ -2,15 +2,22 @@
 
 Create a new idea note / append to notes from a "fleeting thought". Open, create (daily) notes. Vault statistics. _Multiple interfaces._
 
-### Commands
+### Commands (plain CLI)
 
 Check out `Makefile`.
 
+### Commands (with TUI)
+
+```
+cargo run --bin tui
+```
+
 ### TODOs
 
-- **TUI**
+- Default path resolving
 - Licence
-- .md (rendering) for CLI
+- More TUI functions
+  - _Print the created note_
 - Verbose
 - Package
 - Tests and CI

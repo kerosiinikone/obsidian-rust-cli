@@ -93,3 +93,27 @@ fn is_hidden(entry: &DirEntry) -> bool {
         .map(|s| s.starts_with("."))
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::vault::VaultStats;
+
+    #[test]
+    fn frequent_tags() {
+        let mut vs = VaultStats {
+            ..Default::default()
+        };
+        vs.tags.insert("#second".to_string(), 3);
+        vs.tags.insert("#first".to_string(), 4);
+        vs.tags.insert("#third".to_string(), 2);
+        vs.tags.insert("#fourth".to_string(), 1);
+
+        let take = 3;
+        let freq_tags = vs.frequent_tags(take);
+
+        assert_eq!(freq_tags.len(), take);
+        assert_eq!(freq_tags[0], (&("#first".to_string()), &4));
+        assert_eq!(freq_tags[1], (&("#second".to_string()), &3));
+        assert_eq!(freq_tags[2], (&("#third".to_string()), &2));
+    }
+}

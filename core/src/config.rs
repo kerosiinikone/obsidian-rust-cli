@@ -3,7 +3,7 @@ use std::{
     env,
     fs::{self, File},
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use toml::Table;
 
@@ -11,9 +11,7 @@ use crate::template::Template;
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
-    /// Target vault location
     pub vault: PathBuf,
-    /// Templating for new idea notes
     pub template: Template,
 }
 
@@ -26,8 +24,8 @@ impl Config {
         } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
             PathBuf::from(vault)
         } else {
-            let mut path = env::current_dir()?;
-            path.push("config");
+            // Better root path setting?
+            let mut path = get_config_path();
             path.push("default.toml");
             Self::parse_cfg_file(path)?
         };
@@ -39,8 +37,7 @@ impl Config {
         cfg.template.path = if let Some(templ) = &template {
             templ.to_path_buf()
         } else {
-            let mut path = env::current_dir()?;
-            path.push("config");
+            let mut path = get_config_path();
             path.push("default_template.md");
             path
         };
@@ -77,5 +74,30 @@ impl Config {
         let vault_path = vault_path["vault_path"].as_str().unwrap_or("");
 
         Ok(PathBuf::from(vault_path))
+    }
+}
+
+fn get_config_path() -> PathBuf {
+    let workspace_root = env!("WORKSPACE_ROOT");
+    Path::new(workspace_root).join("config")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{Config, get_config_path};
+
+    #[test]
+    fn default_build() {
+        let cfg = Config::build(None, None).unwrap();
+
+        let mut templ_path = get_config_path();
+        templ_path.push("default_template.md");
+
+        assert_eq!(cfg.template.path, templ_path);
+
+        let mut cfg_path = get_config_path();
+        cfg_path.push("default.toml");
+
+        assert_eq!(cfg.vault, Config::parse_cfg_file(cfg_path).unwrap());
     }
 }

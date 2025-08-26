@@ -1,4 +1,4 @@
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, path::PathBuf, process::exit};
 
 use anyhow::Error;
 use chrono::Local;
@@ -13,13 +13,10 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-/// Boilerplate from https://ratatui.rs/examples/apps/user_input/
+// Cmd line args for cfg location
 
 fn main() -> Result<()> {
-    // TODO: Better result handling
-    // cmd line args?
-    let cfg = Config::build(None, None).unwrap();
-
+    let cfg = Config::build(None, None).unwrap_or_else(|_| exit(1));
     color_eyre::install()?;
     let terminal = ratatui::init();
     let app = App::new(cfg).run(terminal);
@@ -194,6 +191,7 @@ impl App {
                 Style::default(),
             ),
         };
+
         let text = Text::from(Line::from(msg)).patch_style(style);
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
@@ -213,6 +211,7 @@ impl App {
                 input_area.y + 1,
             )),
         }
+
         if let Some(err) = self.error_msg.as_ref() {
             let msg = format!("Error: {}", err);
             let text = Text::from(Line::from(msg)).patch_style(style);

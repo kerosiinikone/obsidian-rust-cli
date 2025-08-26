@@ -32,3 +32,21 @@ impl Template {
         Ok(new_note_templ)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::template::{TemplArgs, Template};
+
+    #[test]
+    fn render() {
+        let mut templ = Template {
+            ..Default::default()
+        };
+        let args = &TemplArgs {
+            date: "Hello,".to_string(),
+            body: "World".to_string(),
+        };
+        templ.template = "?time ?body".to_string();
+        assert_eq!(templ.render(&args).unwrap(), "Hello, World".to_string())
+    }
+}
