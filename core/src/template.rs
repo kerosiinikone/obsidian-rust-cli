@@ -47,6 +47,6 @@ mod tests {
             body: "World".to_string(),
         };
         templ.template = "?time ?body".to_string();
-        assert_eq!(templ.render(&args).unwrap(), "Hello, World".to_string())
+        assert_eq!(templ.render(args).unwrap(), "Hello, World".to_string())
     }
 }
