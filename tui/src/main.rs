@@ -14,6 +14,7 @@ use ratatui::{
 };
 
 // Cmd line args for cfg location
+// Tests: https://rust-cli.github.io/book/tutorial/testing.html
 
 fn main() -> Result<()> {
     let cfg = Config::build(None, None).unwrap_or_else(|_| exit(1));
@@ -31,7 +32,6 @@ struct CreatedNote {
 }
 
 struct App {
-    // Idea
     cfg: Config,
     input: String,
     character_index: usize,

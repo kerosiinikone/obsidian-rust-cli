@@ -24,7 +24,6 @@ impl Config {
         } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
             PathBuf::from(vault)
         } else {
-            // Better root path setting?
             let mut path = get_config_path();
             path.push("default.toml");
             Self::parse_cfg_file(path)?
@@ -72,6 +71,7 @@ impl Config {
 
         let vault_path = buf.parse::<Table>()?;
         let vault_path = vault_path["vault_path"].as_str().unwrap_or("");
+        let vault_path = vault_path.replace("~", env!("WORKSPACE_ROOT"));
 
         Ok(PathBuf::from(vault_path))
     }
