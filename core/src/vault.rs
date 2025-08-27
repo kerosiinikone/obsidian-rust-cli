@@ -29,7 +29,7 @@ pub struct VaultStats {
 }
 
 impl VaultStats {
-    pub fn frequent_tags<'a>(&'a self, take: usize) -> Vec<(&'a String, &'a u32)> {
+    pub fn frequent_tags(&self, take: usize) -> Vec<(&String, &u32)> {
         let mut tags_vec: Vec<_> = self.tags.iter().collect();
         tags_vec.sort_by(|a, b| b.1.cmp(a.1));
         tags_vec.into_iter().take(take).collect()
@@ -55,17 +55,17 @@ impl VaultStats {
 
                 let word_count = contents.split_ascii_whitespace().count();
                 let link_count = LINKS_REGEX.find_iter(&contents).count();
-                let mut tag_counts: TagMap = TagMap::new();
+                let mut tags: TagMap = TagMap::new();
 
                 for t in TAGS_REGEX.find_iter(&contents) {
                     let tag = t.as_str().to_string();
-                    *tag_counts.entry(tag).or_insert(0) += 1;
+                    *tags.entry(tag).or_insert(0) += 1;
                 }
 
                 NoteStats {
-                    link_count: link_count,
-                    word_count: word_count,
-                    tags: tag_counts,
+                    link_count,
+                    word_count,
+                    tags,
                 }
             });
         }

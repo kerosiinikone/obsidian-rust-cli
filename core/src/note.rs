@@ -16,11 +16,7 @@ pub struct Note<'a> {
 
 impl<'a> Note<'a> {
     pub fn new(handle: &'a File, path: &'a PathBuf, body: Option<String>) -> Self {
-        Self {
-            body: body,
-            handle: handle,
-            path: path,
-        }
+        Self { body, handle, path }
     }
 
     // This opens the daily note in Obs, another func might open it for reading (aka read it)
@@ -38,8 +34,8 @@ impl<'a> Note<'a> {
     }
 
     pub fn append(&mut self, idea: &str) -> Result<()> {
-        self.handle.write(b"\n")?;
-        self.handle.write_all(&idea.as_bytes())?;
+        let _ = self.handle.write(b"\n")?;
+        self.handle.write_all(idea.as_bytes())?;
         Ok(())
     }
 

@@ -17,16 +17,17 @@ pub struct Config {
 
 impl Config {
     pub fn build(vault: Option<PathBuf>, template: Option<PathBuf>) -> Result<Self> {
-        let mut cfg = Config::default();
-
-        cfg.vault = if let Some(vault) = &vault {
-            vault.to_path_buf()
-        } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
-            PathBuf::from(vault)
-        } else {
-            let mut path = get_config_path();
-            path.push("default.toml");
-            Self::parse_cfg_file(path)?
+        let mut cfg = Config {
+            vault: if let Some(vault) = &vault {
+                vault.to_path_buf()
+            } else if let Result::Ok(vault) = env::var("VAULT_PATH") {
+                PathBuf::from(vault)
+            } else {
+                let mut path = get_config_path();
+                path.push("default.toml");
+                Self::parse_cfg_file(path)?
+            },
+            ..Default::default()
         };
 
         if !cfg.is_valid_vault()? {
@@ -51,7 +52,7 @@ impl Config {
 
     pub fn get_full_path(&self, note_path: &PathBuf) -> Result<PathBuf> {
         let mut abs_path = self.vault.clone();
-        abs_path.push(&note_path);
+        abs_path.push(note_path);
         if !abs_path.is_file() {
             return Err(anyhow::Error::msg("Invalid note path"));
         }
@@ -59,7 +60,7 @@ impl Config {
     }
 
     fn is_valid_vault(&mut self) -> Result<bool> {
-        let mut paths = fs::read_dir(&self.vault.as_path())?;
+        let mut paths = fs::read_dir(self.vault.as_path())?;
         Ok(self.vault.is_dir()
             && paths.any(|path_result| path_result.unwrap().file_name() == ".obsidian"))
     }

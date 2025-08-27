@@ -88,10 +88,10 @@ async fn exec_vault_stats(cfg: &Config) -> Result<()> {
     println!("Most Frequent Tags:");
 
     for (tag, count) in stats.frequent_tags(3) {
-        println!("    {}: {}", tag, count);
+        println!("    {tag}: {count}");
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn exec_new_note(idea: Option<String>, cfg: &Config) -> Result<()> {
@@ -99,7 +99,7 @@ fn exec_new_note(idea: Option<String>, cfg: &Config) -> Result<()> {
 
     if let Some(idea) = idea {
         let formatted = format!("{}", Local::now().format("%Y_%m_%d_%H_%M_%S"));
-        note_path.push(format!("Note_{}.md", formatted));
+        note_path.push(format!("Note_{formatted}.md"));
 
         let handle = File::create(note_path.as_path())?;
 
@@ -111,7 +111,7 @@ fn exec_new_note(idea: Option<String>, cfg: &Config) -> Result<()> {
         let mut note = Note::new(&handle, &note_path, Some(body));
         note.write_file_handle()?;
 
-        println!("Created note: {}", note);
+        println!("Created note: {note}");
         Ok(())
     } else {
         // Prompt for the idea -> make better later
@@ -121,7 +121,7 @@ fn exec_new_note(idea: Option<String>, cfg: &Config) -> Result<()> {
             println!("Please enter your idea (end with Ctrl-D):");
             io::stdin().read_line(&mut idea_buffer)?;
         }
-        return exec_new_note(Some(idea_buffer), cfg);
+        exec_new_note(Some(idea_buffer), cfg)
     }
 }
 
@@ -130,19 +130,19 @@ fn exec_append_note(idea: String, note: PathBuf, cfg: &Config) -> Result<()> {
     let handle = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&abs_path.as_path())?;
+        .open(abs_path.as_path())?;
 
     let mut note = Note::new(&handle, &abs_path, None);
     note.append(&idea)?;
 
-    println!("Appended to note: {}", note);
+    println!("Appended to note: {note}");
     Ok(())
 }
 
 fn exec_open_daily(cfg: &Config) -> Result<()> {
     let mut note_path: PathBuf = cfg.vault.clone();
     let formatted = format!("{}", Local::now().format("%Y-%m-%d"));
-    note_path.push(format!("{}.md", formatted));
+    note_path.push(format!("{formatted}.md"));
 
     let vault_name = cfg
         .vault
@@ -150,13 +150,13 @@ fn exec_open_daily(cfg: &Config) -> Result<()> {
         .and_then(|name| name.to_str())
         .unwrap_or("");
 
-    Note::open(note_path, &vault_name, formatted)?;
+    Note::open(note_path, vault_name, formatted)?;
     Ok(())
 }
 
 fn exec_show_note(note_path: PathBuf, cfg: &Config) -> Result<()> {
     let abs_path = cfg.get_full_path(&note_path)?;
-    let mut handle = File::open(&abs_path.as_path())?;
+    let mut handle = File::open(abs_path.as_path())?;
 
     let mut buf = String::new();
     handle.read_to_string(&mut buf)?;

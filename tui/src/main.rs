@@ -105,7 +105,7 @@ impl App {
 
     fn submit_idea(&mut self) {
         self.created_note = self.create_new_note().unwrap_or_else(|err| {
-            self.error_msg = Some(format!("{}", err));
+            self.error_msg = Some(err.to_string());
             None
         });
         self.input.clear();
@@ -115,7 +115,7 @@ impl App {
     fn create_new_note(&mut self) -> Result<Option<CreatedNote>, Error> {
         let mut note_path: PathBuf = self.cfg.vault.clone();
         let formatted = format!("{}", Local::now().format("%Y_%m_%d_%H_%M_%S"));
-        let title = format!("Note_{}.md", formatted);
+        let title = format!("Note_{formatted}.md");
         note_path.push(title.clone());
 
         let handle = File::create(note_path.as_path())?;
@@ -213,7 +213,7 @@ impl App {
         }
 
         if let Some(err) = self.error_msg.as_ref() {
-            let msg = format!("Error: {}", err);
+            let msg = format!("Error: {err}");
             let text = Text::from(Line::from(msg)).patch_style(style);
             let err_info = Paragraph::new(text);
             frame.render_widget(err_info, info_area);
