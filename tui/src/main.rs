@@ -1,5 +1,3 @@
-use std::{fs::File, io::Read, path::PathBuf, process::exit};
-
 use anyhow::Error;
 use chrono::Local;
 use clap::Parser;
@@ -13,6 +11,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Paragraph},
 };
+use std::{fs::File, io::Read, path::PathBuf, process::exit};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -24,17 +23,6 @@ struct Args {
     /// Path to template
     #[arg(short, long)]
     pub template: Option<PathBuf>,
-}
-
-fn main() -> Result<()> {
-    let args = Args::parse();
-    let cfg = Config::build(args.vault, args.template).unwrap_or_else(|_| exit(1));
-
-    color_eyre::install()?;
-    let terminal = ratatui::init();
-    let app = App::new(cfg).run(terminal);
-    ratatui::restore();
-    app
 }
 
 #[allow(dead_code)]
@@ -70,6 +58,7 @@ struct NewScreen {
 #[allow(dead_code)]
 struct ShowScreen {
     input: String,
+    vertical_scroll: usize,
     note_content: Option<String>,
     character_index: usize,
     error_msg: Option<String>,
@@ -82,12 +71,26 @@ enum InputMode {
     Editing,
 }
 
+fn main() -> Result<()> {
+    let args = Args::parse();
+    let cfg = Config::build(args.vault, args.template).unwrap_or_else(|_| exit(1));
+
+    color_eyre::install()?;
+    let terminal = ratatui::init();
+    let app = App::new(cfg).run(terminal);
+    ratatui::restore();
+    app
+}
+
+// Scroller: https://ratatui.rs/examples/widgets/scrollbar/
+
 #[allow(dead_code)]
 impl ShowScreen {
     const fn new(cfg: Config) -> Self {
         Self {
             cfg,
             character_index: 0,
+            vertical_scroll: 0,
             error_msg: None,
             note_content: None,
             input: String::new(),
@@ -101,6 +104,12 @@ impl ShowScreen {
                     self.search().unwrap_or_else(|err| {
                         self.error_msg = Some(err.to_string());
                     })
+                }
+                KeyCode::Down => {
+                    self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                }
+                KeyCode::Up => {
+                    self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
                 }
                 KeyCode::Char(to_insert) => self.enter_char(to_insert),
                 KeyCode::Backspace => self.delete_char(),
@@ -172,7 +181,7 @@ impl ShowScreen {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
             Constraint::Max(3),
@@ -181,7 +190,12 @@ impl ShowScreen {
         ]);
         let [help_area, input_area, note_area, info_area] = vertical.areas(frame.area());
         let (msg, style) = (
-            vec!["Type out the path of the note to display".into()],
+            vec![
+                "Type out the path of the note to display. ".into(),
+                "Use ".into(),
+                "Arrows ".bold(),
+                "to scroll the note.".into(),
+            ],
             Style::default(),
         );
         let text = Text::from(Line::from(msg)).patch_style(style);
@@ -198,12 +212,13 @@ impl ShowScreen {
             input_area.y + 1,
         ));
 
-        // Refactor + pretty markdown rendering
-        let note = Paragraph::new(if let Some(note_content) = self.note_content.clone() {
+        let note_content = if let Some(note_content) = &self.note_content {
             note_content
         } else {
-            "".to_string()
-        });
+            ""
+        };
+
+        let note = Paragraph::new(note_content).scroll((self.vertical_scroll as u16, 0));
         frame.render_widget(note, note_area);
 
         if let Some(err) = self.error_msg.as_ref() {
@@ -403,7 +418,6 @@ impl App {
         }
     }
 
-    // Use dynamic dispatch for diff screens?
     fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
         loop {
             terminal.draw(|frame| match self.screen_select {

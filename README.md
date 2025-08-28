@@ -19,8 +19,7 @@ cargo run --bin tui
 ### TODOs
 
 - Licence
-- More TUI functions
-  - _Print the created note_
+- Markdown formatting
 - Verbose
 - Package
 - Test coverage
