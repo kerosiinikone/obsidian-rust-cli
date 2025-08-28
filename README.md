@@ -14,7 +14,8 @@ cargo run --bin tui
 
 #### Preview
 
-<img width="1109" height="620" alt="image" src="https://github.com/user-attachments/assets/2e71153d-3a4d-4af0-9845-928d1d740c6f" />
+<img width="1097" height="531" alt="image" src="https://github.com/user-attachments/assets/5198d4e3-ebdb-4de3-8d0f-0f254cfaa39a" />
+<img width="1096" height="465" alt="image" src="https://github.com/user-attachments/assets/c9ad98ea-74ae-4bed-9605-41b646aee986" />
 
 ### TODOs
 
