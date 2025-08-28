@@ -2,22 +2,34 @@ use std::{fs::File, path::PathBuf, process::exit};
 
 use anyhow::Error;
 use chrono::Local;
+use clap::Parser;
 use cli_core::{config::Config, note::Note, template::TemplArgs};
 use color_eyre::Result;
 use ratatui::{
     DefaultTerminal, Frame,
-    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     layout::{Constraint, Layout, Position},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Text},
     widgets::{Block, Paragraph},
 };
 
-// Cmd line args for cfg location
-// Tests: https://rust-cli.github.io/book/tutorial/testing.html
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to vault
+    #[arg(short, long)]
+    pub vault: Option<PathBuf>,
+
+    /// Path to template
+    #[arg(short, long)]
+    pub template: Option<PathBuf>,
+}
 
 fn main() -> Result<()> {
-    let cfg = Config::build(None, None).unwrap_or_else(|_| exit(1));
+    let args = Args::parse();
+    let cfg = Config::build(args.vault, args.template).unwrap_or_else(|_| exit(1));
+
     color_eyre::install()?;
     let terminal = ratatui::init();
     let app = App::new(cfg).run(terminal);
@@ -26,11 +38,18 @@ fn main() -> Result<()> {
 }
 
 #[allow(dead_code)]
+enum Screen {
+    New,
+    Show,
+}
+
+#[allow(dead_code)]
 struct CreatedNote {
     title: String,
     body: String,
 }
 
+#[allow(dead_code)]
 struct App {
     cfg: Config,
     input: String,
@@ -38,14 +57,39 @@ struct App {
     input_mode: InputMode,
     created_note: Option<CreatedNote>,
     error_msg: Option<String>,
+    screen_select: Screen,
+    new_note_screen: NewScreen,
+    show_note_screen: ShowScreen,
 }
 
+#[allow(dead_code)]
+struct NewScreen {
+    input: String,
+    character_index: usize,
+    input_mode: InputMode,
+    created_note: Option<CreatedNote>,
+    error_msg: Option<String>,
+    cfg: Config,
+}
+
+#[allow(dead_code)]
+struct ShowScreen {
+    cfg: Config,
+}
+
+#[allow(dead_code)]
 enum InputMode {
     Normal,
     Editing,
 }
 
-impl App {
+impl ShowScreen {
+    const fn new(cfg: Config) -> Self {
+        Self { cfg }
+    }
+}
+
+impl NewScreen {
     const fn new(cfg: Config) -> Self {
         Self {
             input: String::new(),
@@ -54,6 +98,28 @@ impl App {
             character_index: 0,
             error_msg: None,
             cfg,
+        }
+    }
+
+    fn exec(&mut self, relay: KeyEvent) {
+        match self.input_mode {
+            InputMode::Normal => match relay.code {
+                KeyCode::Char('e') => {
+                    self.input_mode = InputMode::Editing;
+                }
+                KeyCode::Char('q') => {}
+                _ => {}
+            },
+            InputMode::Editing if relay.kind == KeyEventKind::Press => match relay.code {
+                KeyCode::Enter if !self.input.trim_ascii().is_empty() => self.submit_idea(),
+                KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                KeyCode::Backspace => self.delete_char(),
+                KeyCode::Left => self.move_cursor_left(),
+                KeyCode::Right => self.move_cursor_right(),
+                KeyCode::Esc => self.input_mode = InputMode::Normal,
+                _ => {}
+            },
+            InputMode::Editing => {}
         }
     }
 
@@ -131,36 +197,6 @@ impl App {
         Ok(Some(CreatedNote { body, title }))
     }
 
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        loop {
-            terminal.draw(|frame| self.draw(frame))?;
-
-            if let Event::Key(key) = event::read()? {
-                match self.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('e') => {
-                            self.input_mode = InputMode::Editing;
-                        }
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        _ => {}
-                    },
-                    InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter if !self.input.trim_ascii().is_empty() => self.submit_idea(),
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => self.input_mode = InputMode::Normal,
-                        _ => {}
-                    },
-                    InputMode::Editing => {}
-                }
-            }
-        }
-    }
-
     fn draw(&self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
@@ -173,12 +209,15 @@ impl App {
             InputMode::Normal => (
                 vec![
                     "Press ".into(),
-                    "q".bold(),
+                    "Del".bold(),
                     " to exit, ".into(),
                     "e".bold(),
-                    " to start typing an idea.".bold(),
+                    " to start typing an idea. ".bold(),
+                    "Press ".into(),
+                    "Insert".bold(),
+                    " to switch to displaying notes.".into(),
                 ],
-                Style::default().add_modifier(Modifier::RAPID_BLINK),
+                Style::default(),
             ),
             InputMode::Editing => (
                 vec![
@@ -186,7 +225,7 @@ impl App {
                     "Esc".bold(),
                     " to stop typing, ".into(),
                     "Enter".bold(),
-                    " to create the note from the typed idea".into(),
+                    " to create a note.".into(),
                 ],
                 Style::default(),
             ),
@@ -199,10 +238,12 @@ impl App {
         let input = Paragraph::new(self.input.as_str())
             .style(match self.input_mode {
                 InputMode::Normal => Style::default(),
-                InputMode::Editing => Style::default().fg(Color::Yellow),
+                InputMode::Editing => Style::default().fg(Color::Rgb(126u8, 29u8, 251u8)),
             })
-            .block(Block::bordered().title("Input"));
+            .block(Block::bordered().title("Idea"));
+
         frame.render_widget(input, input_area);
+
         match self.input_mode {
             InputMode::Normal => {}
             #[allow(clippy::cast_possible_truncation)]
@@ -222,6 +263,70 @@ impl App {
             let text = Text::from(Line::from(msg)).patch_style(style);
             let created_info = Paragraph::new(text);
             frame.render_widget(created_info, info_area);
+        }
+    }
+}
+
+impl ShowScreen {
+    fn draw(&self, frame: &mut Frame) {
+        let vertical = Layout::vertical([Constraint::Length(1)]);
+        let [help_area] = vertical.areas(frame.area());
+
+        let (msg, style) = (
+            vec!["Type out the path of the note to display".into()],
+            Style::default(),
+        );
+
+        let text = Text::from(Line::from(msg)).patch_style(style);
+        let help_message = Paragraph::new(text);
+        frame.render_widget(help_message, help_area);
+    }
+}
+
+impl App {
+    fn new(cfg: Config) -> Self {
+        Self {
+            input: String::new(),
+            input_mode: InputMode::Normal,
+            created_note: None,
+            character_index: 0,
+            error_msg: None,
+            screen_select: Screen::New,
+            new_note_screen: NewScreen::new(cfg.clone()),
+            show_note_screen: ShowScreen::new(cfg.clone()),
+            cfg,
+        }
+    }
+
+    // Use dynamic dispatch for diff screens?
+    fn run(&mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        loop {
+            terminal.draw(|frame| match self.screen_select {
+                Screen::New => self.new_note_screen.draw(frame),
+                Screen::Show => self.show_note_screen.draw(frame),
+            })?;
+
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Delete => {
+                        return Ok(());
+                    }
+                    KeyCode::Insert if key.kind == KeyEventKind::Press => {
+                        self.screen_select = if let Screen::Show = self.screen_select {
+                            Screen::New
+                        } else {
+                            Screen::Show
+                        }
+                    }
+                    _ => {
+                        match self.screen_select {
+                            Screen::New => self.new_note_screen.exec(key),
+                            // Screen::Show => self.show_note_screen.exec(relay),
+                            _ => {}
+                        }
+                    }
+                }
+            }
         }
     }
 }
