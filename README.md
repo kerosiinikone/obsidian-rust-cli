@@ -12,12 +12,15 @@ Check out `Makefile`.
 cargo run --bin tui
 ```
 
+#### Preview
+
+<img width="1109" height="620" alt="image" src="https://github.com/user-attachments/assets/2e71153d-3a4d-4af0-9845-928d1d740c6f" />
+
 ### TODOs
 
-- Default path resolving
 - Licence
 - More TUI functions
   - _Print the created note_
 - Verbose
 - Package
-- Tests and CI
+- Test coverage
