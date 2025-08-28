@@ -54,7 +54,7 @@ impl Config {
         let mut abs_path = self.vault.clone();
         abs_path.push(note_path);
         if !abs_path.is_file() {
-            return Err(anyhow::Error::msg("Invalid note path"));
+            return Err(anyhow::Error::msg("Invalid note path, not a note"));
         }
         Ok(abs_path.to_path_buf())
     }

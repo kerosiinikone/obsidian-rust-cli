@@ -1,4 +1,4 @@
-use std::{fs::File, path::PathBuf, process::exit};
+use std::{fs::File, io::Read, path::PathBuf, process::exit};
 
 use anyhow::Error;
 use chrono::Local;
@@ -52,11 +52,6 @@ struct CreatedNote {
 #[allow(dead_code)]
 struct App {
     cfg: Config,
-    input: String,
-    character_index: usize,
-    input_mode: InputMode,
-    created_note: Option<CreatedNote>,
-    error_msg: Option<String>,
     screen_select: Screen,
     new_note_screen: NewScreen,
     show_note_screen: ShowScreen,
@@ -74,6 +69,10 @@ struct NewScreen {
 
 #[allow(dead_code)]
 struct ShowScreen {
+    input: String,
+    note_content: Option<String>,
+    character_index: usize,
+    error_msg: Option<String>,
     cfg: Config,
 }
 
@@ -83,9 +82,136 @@ enum InputMode {
     Editing,
 }
 
+#[allow(dead_code)]
 impl ShowScreen {
     const fn new(cfg: Config) -> Self {
-        Self { cfg }
+        Self {
+            cfg,
+            character_index: 0,
+            error_msg: None,
+            note_content: None,
+            input: String::new(),
+        }
+    }
+
+    fn exec(&mut self, relay: KeyEvent) {
+        if relay.kind == KeyEventKind::Press {
+            match relay.code {
+                KeyCode::Enter if !self.input.trim_ascii().is_empty() => {
+                    self.search().unwrap_or_else(|err| {
+                        self.error_msg = Some(err.to_string());
+                    })
+                }
+                KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                KeyCode::Backspace => self.delete_char(),
+                KeyCode::Left => self.move_cursor_left(),
+                KeyCode::Right => self.move_cursor_right(),
+                _ => {}
+            }
+        }
+    }
+
+    fn move_cursor_left(&mut self) {
+        let cursor_moved_left = self.character_index.saturating_sub(1);
+        self.character_index = self.clamp_cursor(cursor_moved_left);
+    }
+
+    fn move_cursor_right(&mut self) {
+        let cursor_moved_right = self.character_index.saturating_add(1);
+        self.character_index = self.clamp_cursor(cursor_moved_right);
+    }
+
+    fn enter_char(&mut self, new_char: char) {
+        let index = self.byte_index();
+        self.input.insert(index, new_char);
+        self.move_cursor_right();
+    }
+
+    fn byte_index(&self) -> usize {
+        self.input
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.character_index)
+            .unwrap_or(self.input.len())
+    }
+
+    fn delete_char(&mut self) {
+        let is_not_cursor_leftmost = self.character_index != 0;
+        if is_not_cursor_leftmost {
+            let current_index = self.character_index;
+            let from_left_to_current_index = current_index - 1;
+
+            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
+            let after_char_to_delete = self.input.chars().skip(current_index);
+
+            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
+            self.move_cursor_left();
+        }
+    }
+
+    fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
+        new_cursor_pos.clamp(0, self.input.chars().count())
+    }
+
+    fn reset_cursor(&mut self) {
+        self.character_index = 0;
+    }
+
+    fn search(&mut self) -> anyhow::Result<()> {
+        let abs_path = self.cfg.get_full_path(&PathBuf::from(&self.input))?;
+        let mut handle = File::open(abs_path.as_path())?;
+
+        let mut buf = String::new();
+        handle.read_to_string(&mut buf)?;
+
+        self.note_content = Some(buf);
+        self.input.clear();
+        self.reset_cursor();
+        self.error_msg = None;
+
+        Ok(())
+    }
+
+    fn draw(&self, frame: &mut Frame) {
+        let vertical = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Max(3),
+            Constraint::Min(1),
+            Constraint::Length(3),
+        ]);
+        let [help_area, input_area, note_area, info_area] = vertical.areas(frame.area());
+        let (msg, style) = (
+            vec!["Type out the path of the note to display".into()],
+            Style::default(),
+        );
+        let text = Text::from(Line::from(msg)).patch_style(style);
+        let help_message = Paragraph::new(text);
+        frame.render_widget(help_message, help_area);
+
+        let input = Paragraph::new(self.input.as_str())
+            .style(Style::default().fg(Color::Rgb(126u8, 29u8, 251u8)))
+            .block(Block::bordered().title("Path (inside the vault)"));
+        frame.render_widget(input, input_area);
+
+        frame.set_cursor_position(Position::new(
+            input_area.x + self.character_index as u16 + 1,
+            input_area.y + 1,
+        ));
+
+        // Refactor + pretty markdown rendering
+        let note = Paragraph::new(if let Some(note_content) = self.note_content.clone() {
+            note_content
+        } else {
+            "".to_string()
+        });
+        frame.render_widget(note, note_area);
+
+        if let Some(err) = self.error_msg.as_ref() {
+            let msg = format!("Error: {err}");
+            let text = Text::from(Line::from(msg)).patch_style(style);
+            let err_info = Paragraph::new(text);
+            frame.render_widget(err_info, info_area);
+        }
     }
 }
 
@@ -267,30 +393,9 @@ impl NewScreen {
     }
 }
 
-impl ShowScreen {
-    fn draw(&self, frame: &mut Frame) {
-        let vertical = Layout::vertical([Constraint::Length(1)]);
-        let [help_area] = vertical.areas(frame.area());
-
-        let (msg, style) = (
-            vec!["Type out the path of the note to display".into()],
-            Style::default(),
-        );
-
-        let text = Text::from(Line::from(msg)).patch_style(style);
-        let help_message = Paragraph::new(text);
-        frame.render_widget(help_message, help_area);
-    }
-}
-
 impl App {
     fn new(cfg: Config) -> Self {
         Self {
-            input: String::new(),
-            input_mode: InputMode::Normal,
-            created_note: None,
-            character_index: 0,
-            error_msg: None,
             screen_select: Screen::New,
             new_note_screen: NewScreen::new(cfg.clone()),
             show_note_screen: ShowScreen::new(cfg.clone()),
@@ -318,13 +423,10 @@ impl App {
                             Screen::Show
                         }
                     }
-                    _ => {
-                        match self.screen_select {
-                            Screen::New => self.new_note_screen.exec(key),
-                            // Screen::Show => self.show_note_screen.exec(relay),
-                            _ => {}
-                        }
-                    }
+                    _ => match self.screen_select {
+                        Screen::New => self.new_note_screen.exec(key),
+                        Screen::Show => self.show_note_screen.exec(key),
+                    },
                 }
             }
         }
