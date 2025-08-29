@@ -2,7 +2,7 @@ use cli_core::config::Config;
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
-    layout::{Constraint, Layout, Position},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Text},
     widgets::{Block, Paragraph},
@@ -74,6 +74,23 @@ impl ShowScreen {
             Constraint::Length(3),
         ]);
         let [help_area, input_area, note_area, info_area] = vertical.areas(frame.area());
+
+        self.render_help(frame, help_area);
+        self.render_input(frame, input_area);
+        self.render_note(frame, note_area);
+        self.render_error(frame, info_area);
+    }
+
+    fn render_error(&mut self, frame: &mut Frame, area: Rect) {
+        if let Some(err) = self.error_msg.as_ref() {
+            let msg = format!("Error: {err}");
+            let text = Text::from(Line::from(msg)).patch_style(Style::default());
+            let err_info = Paragraph::new(text);
+            frame.render_widget(err_info, area);
+        }
+    }
+
+    fn render_help(&mut self, frame: &mut Frame, area: Rect) {
         let (msg, style) = (
             vec![
                 "Type out the path of the note to display. ".not_bold(),
@@ -85,32 +102,28 @@ impl ShowScreen {
         );
         let text = Text::from(Line::from(msg)).patch_style(style);
         let help_message = Paragraph::new(text);
-        frame.render_widget(help_message, help_area);
+        frame.render_widget(help_message, area);
+    }
 
+    fn render_input(&mut self, frame: &mut Frame, area: Rect) {
         let input = Paragraph::new(self.input.input.as_str())
             .style(Style::default().fg(Color::Rgb(126u8, 29u8, 251u8)))
             .block(Block::bordered().title("Path (inside the vault)"));
-        frame.render_widget(input, input_area);
+        frame.render_widget(input, area);
 
         frame.set_cursor_position(Position::new(
-            input_area.x + self.input.character_index as u16 + 1,
-            input_area.y + 1,
+            area.x + self.input.character_index as u16 + 1,
+            area.y + 1,
         ));
+    }
 
-        let note_content = if let Some(note_content) = &self.note_content {
+    fn render_note(&mut self, frame: &mut Frame, area: Rect) {
+        let note = Paragraph::new(if let Some(note_content) = &self.note_content {
             note_content
         } else {
             ""
-        };
-
-        let note = Paragraph::new(note_content).scroll((self.vertical_scroll as u16, 0));
-        frame.render_widget(note, note_area);
-
-        if let Some(err) = self.error_msg.as_ref() {
-            let msg = format!("Error: {err}");
-            let text = Text::from(Line::from(msg)).patch_style(style);
-            let err_info = Paragraph::new(text);
-            frame.render_widget(err_info, info_area);
-        }
+        })
+        .scroll((self.vertical_scroll as u16, 0));
+        frame.render_widget(note, area);
     }
 }

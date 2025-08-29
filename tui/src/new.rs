@@ -4,7 +4,7 @@ use cli_core::{config::Config, note::Note, template::TemplArgs};
 use ratatui::{
     Frame,
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
-    layout::{Constraint, Layout, Position},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Text},
     widgets::{Block, Paragraph},
@@ -69,6 +69,19 @@ impl NewScreen {
         self.input.reset_cursor();
     }
 
+    pub(crate) fn draw(&mut self, frame: &mut Frame) {
+        let vertical = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(3),
+        ]);
+        let [help_area, input_area, info_area] = vertical.areas(frame.area());
+
+        self.render_help(frame, help_area);
+        self.render_input(frame, input_area);
+        self.render_info_error(frame, info_area);
+    }
+
     fn create_new_note(&mut self, cfg: &Config) -> Result<Option<CreatedNote>, Error> {
         let mut note_path: PathBuf = cfg.vault.clone();
         let formatted = format!("{}", Local::now().format("%Y_%m_%d_%H_%M_%S"));
@@ -88,14 +101,7 @@ impl NewScreen {
         Ok(Some(CreatedNote { body, title }))
     }
 
-    pub(crate) fn draw(&self, frame: &mut Frame) {
-        let vertical = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Min(1),
-            Constraint::Length(3),
-        ]);
-        let [help_area, input_area, info_area] = vertical.areas(frame.area());
-
+    fn render_help(&self, frame: &mut Frame, area: Rect) {
         let (msg, style) = match self.input_mode {
             InputMode::Normal => (
                 vec![
@@ -124,8 +130,10 @@ impl NewScreen {
 
         let text = Text::from(Line::from(msg)).patch_style(style);
         let help_message = Paragraph::new(text);
-        frame.render_widget(help_message, help_area);
+        frame.render_widget(help_message, area);
+    }
 
+    fn render_input(&self, frame: &mut Frame, area: Rect) {
         let input = Paragraph::new(self.input.input.as_str())
             .style(match self.input_mode {
                 InputMode::Normal => Style::default(),
@@ -133,27 +141,30 @@ impl NewScreen {
             })
             .block(Block::bordered().title("Idea"));
 
-        frame.render_widget(input, input_area);
+        frame.render_widget(input, area);
 
         match self.input_mode {
             InputMode::Normal => {}
             #[allow(clippy::cast_possible_truncation)]
             InputMode::Editing => frame.set_cursor_position(Position::new(
-                input_area.x + self.input.character_index as u16 + 1,
-                input_area.y + 1,
+                area.x + self.input.character_index as u16 + 1,
+                area.y + 1,
             )),
         }
+    }
 
+    fn render_info_error(&self, frame: &mut Frame, area: Rect) {
+        let style = Style::default();
         if let Some(err) = self.error_msg.as_ref() {
             let msg = format!("Error: {err}");
             let text = Text::from(Line::from(msg)).patch_style(style);
             let err_info = Paragraph::new(text);
-            frame.render_widget(err_info, info_area);
+            frame.render_widget(err_info, area);
         } else if let Some(note) = self.created_note.as_ref() {
             let msg = format!("Created a new note: {}", note.title);
             let text = Text::from(Line::from(msg)).patch_style(style);
             let created_info = Paragraph::new(text);
-            frame.render_widget(created_info, info_area);
+            frame.render_widget(created_info, area);
         }
     }
 }

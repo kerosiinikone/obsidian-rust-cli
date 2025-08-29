@@ -14,15 +14,15 @@ use tokio::main;
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
-    pub command: Command,
+    command: Command,
 
     /// Path to vault
     #[arg(short, long)]
-    pub vault: Option<PathBuf>,
+    vault: Option<PathBuf>,
 
     /// Path to template
     #[arg(short, long)]
-    pub template: Option<PathBuf>,
+    template: Option<PathBuf>,
 }
 
 #[derive(Subcommand, Debug)]

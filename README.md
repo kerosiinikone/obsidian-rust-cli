@@ -19,9 +19,11 @@ cargo run --bin tui
 
 ### TODOs
 
+- **Markdown formatting**
+- **Async vault stats (TUI)**
 - Licence
+- Terminal setup
 - Signals for TUI
-- Markdown formatting
-- Verbose
-- Package
 - Test coverage
+- _Verbose_
+- _Package_
