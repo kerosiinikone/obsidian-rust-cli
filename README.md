@@ -20,6 +20,7 @@ cargo run --bin tui
 ### TODOs
 
 - Licence
+- Signals for TUI
 - Markdown formatting
 - Verbose
 - Package
