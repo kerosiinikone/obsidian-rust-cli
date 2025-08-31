@@ -21,9 +21,9 @@ cargo run --bin tui
 
 - **Markdown formatting**
 - **Async vault stats (TUI)**
+- **Signals and panic handling (TUI)**
 - Licence
 - Terminal setup
-- Signals for TUI
 - Test coverage
 - _Verbose_
 - _Package_
